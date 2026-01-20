@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamHub Premium - Catálogo & Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SweetAlert2 for nice popups -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        /* Custom Neon & Glow Effects */
+        body {
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .neon-text {
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.7), 0 0 20px rgba(56, 189, 248, 0.5);
+        }
+        .neon-border {
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .chart-container {
+            position: relative; 
+            width: 100%; 
+            max-width: 600px; 
+            margin-left: auto; 
+            margin-right: auto; 
+            height: 300px; 
+            max-height: 400px;
+        }
+        @media (min-width: 768px) { 
+            .chart-container { 
+                height: 350px; 
+            } 
+        }
+        /* Admin Panel Transition */
+        #adminPanel {
+            transition: all 0.5s ease-in-out;
+        }
+        .swal2-popup {
+            background: #1e293b !important;
+            color: #fff !important;
+            border: 1px solid #475569;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="w-full glass-panel sticky top-0 z-50 border-b border-slate-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center cursor-pointer" onclick="scrollToSection('home')">
+                    <span class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-500">
+                        STREAM<span class="text-white">PREMIUM</span>
+                    </span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <button onclick="scrollToSection('home')" class="hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition">Inicio</button>
+                        <button onclick="scrollToSection('catalogue')" class="hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition">Catálogo</button>
+                        <button onclick="scrollToSection('stats')" class="hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition">Beneficios</button>
+                        <button onclick="toggleAdminPanel()" id="navAdminBtn" class="hidden text-yellow-400 hover:bg-slate-700 px-3 py-2 rounded-md text-sm font-medium transition border border-yellow-400/30">🛠️ Panel Admin</button>
+                    </div>
+                </div>
+                <div>
+                    <button onclick="contactWhatsApp()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full font-bold text-sm transition shadow-lg shadow-green-900/50 flex items-center gap-2">
+                        <span>📲</span> WhatsApp
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow">
+        
+        <!-- Hero Section -->
+        <section id="home" class="relative overflow-hidden py-20 sm:py-32 bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+            <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+                <div class="inline-block mb-4 px-4 py-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-sm font-semibold tracking-wide uppercase neon-border">
+                    Servicio Premium Garantizado
+                </div>
+                <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6">
+                    <span class="block text-white">CUENTAS DE STREAMING</span>
+                    <span class="block bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-500 neon-text">PREMIUM</span>
+                </h1>
+                <p class="mt-4 text-xl text-slate-300 max-w-2xl mx-auto">
+                    Perfiles y cuentas completas disponibles. Accede al mejor entretenimiento hoy mismo.
+                </p>
+                <div class="mt-10 flex justify-center gap-4">
+                    <button onclick="scrollToSection('catalogue')" class="px-8 py-4 bg-purple-600 hover:bg-purple-500 rounded-lg font-bold text-white shadow-lg shadow-purple-900/50 transition transform hover:-translate-y-1">
+                        Ver Catálogo
+                    </button>
+                    <button onclick="scrollToSection('stats')" class="px-8 py-4 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg font-bold text-slate-200 transition">
+                        ¿Por qué elegirnos?
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ADMIN PANEL SECTION (Hidden by default) -->
+        <section id="adminPanel" class="hidden py-10 bg-slate-950 border-b border-yellow-500/30 relative">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-500 to-orange-500"></div>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-3xl font-bold text-yellow-400 flex items-center gap-2">🛠️ Panel de Control <span class="text-sm text-slate-400 font-normal">(Modo Edición)</span></h2>
+                    <button onclick="toggleAdminPanel()" class="text-slate-400 hover:text-white">Cerrar Panel ✖</button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Add Product Form -->
+                    <div class="glass-panel p-6 rounded-xl border-yellow-500/20">
+                        <h3 class="text-xl font-bold text-white mb-4">Agregar Nuevo Producto</h3>
+                        <form id="addProductForm" onsubmit="handleAddProduct(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-400 mb-1">Nombre del Servicio</label>
+                                <input type="text" id="pName" required placeholder="Ej: Spotify Premium" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-yellow-400 focus:outline-none">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-400 mb-1">Precio (S/)</label>
+                                    <input type="number" id="pPrice" required placeholder="10.00" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-yellow-400 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-400 mb-1">Precio Oficial (S/)</label>
+                                    <input type="number" id="pOfficial" required placeholder="30.00" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-yellow-400 focus:outline-none">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-400 mb-1">Categoría</label>
+                                <select id="pCategory" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-yellow-400 focus:outline-none">
+                                    <option value="streaming">Películas & Series</option>
+                                    <option value="anime">Anime</option>
+                                    <option value="sports">Deportes & TV</option>
+                                    <option value="music">Música</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-400 mb-1">Icono (Emoji)</label>
+                                    <input type="text" id="pIcon" required placeholder="🎵" maxlength="2" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-yellow-400 focus:outline-none text-center text-xl">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-400 mb-1">Color Fondo</label>
+                                    <select id="pColor" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-yellow-400 focus:outline-none">
+                                        <option value="from-purple-800 to-blue-900">Morado/Azul</option>
+                                        <option value="from-blue-700 to-blue-900">Azul Profundo</option>
+                                        <option value="from-red-700 to-red-900">Rojo Netflix</option>
+                                        <option value="from-green-600 to-green-800">Verde Spotify</option>
+                                        <option value="from-orange-500 to-orange-700">Naranja Anime</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 rounded transition">
+                                + Agregar al Catálogo
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Product List (Delete) -->
+                    <div class="glass-panel p-6 rounded-xl border-yellow-500/20 lg:col-span-2 flex flex-col h-96">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-white">Inventario Actual</h3>
+                            <button onclick="resetToDefault()" class="text-xs text-red-400 hover:text-red-300 underline">Restaurar valores de fábrica</button>
+                        </div>
+                        <div class="overflow-y-auto pr-2 custom-scrollbar flex-grow">
+                            <table class="w-full text-sm text-left text-slate-300">
+                                <thead class="text-xs text-slate-400 uppercase bg-slate-800 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 py-2">Icon</th>
+                                        <th class="px-4 py-2">Nombre</th>
+                                        <th class="px-4 py-2">Precio</th>
+                                        <th class="px-4 py-2 text-right">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Catalogue Section -->
+        <section id="catalogue" class="py-16 bg-slate-900 relative">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-10">
+                    <div>
+                        <h2 class="text-3xl font-bold text-white">Catálogo de Servicios</h2>
+                        <p class="mt-2 text-slate-400">Explora todas nuestras plataformas disponibles.</p>
+                    </div>
+                    
+                    <!-- Filters -->
+                    <div class="mt-6 md:mt-0 flex flex-wrap gap-2">
+                        <button onclick="filterServices('all')" class="filter-btn active px-4 py-2 rounded-full text-sm font-semibold bg-cyan-600 text-white transition">Todos</button>
+                        <button onclick="filterServices('streaming')" class="filter-btn px-4 py-2 rounded-full text-sm font-semibold bg-slate-700 text-slate-300 hover:bg-slate-600 transition">Películas</button>
+                        <button onclick="filterServices('anime')" class="filter-btn px-4 py-2 rounded-full text-sm font-semibold bg-slate-700 text-slate-300 hover:bg-slate-600 transition">Anime</button>
+                        <button onclick="filterServices('sports')" class="filter-btn px-4 py-2 rounded-full text-sm font-semibold bg-slate-700 text-slate-300 hover:bg-slate-600 transition">Deportes</button>
+                    </div>
+                </div>
+
+                <!-- Service Grid -->
+                <div id="serviceGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                    <!-- Cards will be injected via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats & Insights Section -->
+        <section id="stats" class="py-16 bg-slate-800">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold text-white">¿Por qué elegirnos?</h2>
+                    <p class="mt-2 text-slate-400">Tu bolsillo y tu entretenimiento te lo agradecerán.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <!-- Chart 1: Price Comparison -->
+                    <div class="glass-panel p-6 rounded-2xl">
+                        <h3 class="text-xl font-bold text-cyan-400 mb-4 text-center">Ahorro Mensual Estimado</h3>
+                        <p class="text-sm text-slate-400 mb-6 text-center">Comparativa de precios oficiales vs. nuestros precios.</p>
+                        <div class="chart-container">
+                            <canvas id="savingsChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Chart 2: Content Distribution -->
+                    <div class="glass-panel p-6 rounded-2xl">
+                        <h3 class="text-xl font-bold text-purple-400 mb-4 text-center">Variedad de Contenido</h3>
+                        <p class="text-sm text-slate-400 mb-6 text-center">Tenemos todo lo que buscas en un solo lugar.</p>
+                        <div class="chart-container">
+                            <canvas id="contentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Value Badges -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+                    <div class="p-6 bg-slate-900 rounded-xl border border-slate-700 hover:border-cyan-500 transition cursor-pointer group" onclick="highlightBadge(this)">
+                        <div class="text-4xl mb-4 group-hover:scale-110 transition duration-300">🛡️</div>
+                        <h3 class="text-lg font-bold text-white group-hover:text-cyan-400 transition">Garantía Total</h3>
+                        <p class="text-slate-400 mt-2 text-sm">Reposición inmediata ante cualquier inconveniente.</p>
+                    </div>
+                    <div class="p-6 bg-slate-900 rounded-xl border border-slate-700 hover:border-green-500 transition cursor-pointer group" onclick="highlightBadge(this)">
+                        <div class="text-4xl mb-4 group-hover:scale-110 transition duration-300">⚡</div>
+                        <h3 class="text-lg font-bold text-white group-hover:text-green-400 transition">Entrega Rápida</h3>
+                        <p class="text-slate-400 mt-2 text-sm">Accesos en minutos tras confirmar el pago.</p>
+                    </div>
+                    <div class="p-6 bg-slate-900 rounded-xl border border-slate-700 hover:border-purple-500 transition cursor-pointer group" onclick="highlightBadge(this)">
+                        <div class="text-4xl mb-4 group-hover:scale-110 transition duration-300">🎧</div>
+                        <h3 class="text-lg font-bold text-white group-hover:text-purple-400 transition">Soporte 24/7</h3>
+                        <p class="text-slate-400 mt-2 text-sm">Atención personalizada para resolver dudas.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 py-10 border-t border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <h2 class="text-2xl font-bold text-white mb-4">¿Listo para empezar?</h2>
+            <p class="text-slate-400 mb-8">Obtén acceso inmediato a las mejores plataformas del mercado.</p>
+            <button onclick="contactWhatsApp()" class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-white text-lg transition shadow-lg shadow-green-900/50 animate-pulse">
+                📲 Escríbenos por WhatsApp
+            </button>
+            <div class="mt-8 flex flex-col items-center">
+                <p class="text-xs text-slate-600 mb-2">© 2024 StreamHub Premium.</p>
+                <button onclick="requestAdminAccess()" class="text-xs text-slate-700 hover:text-cyan-500 transition">
+                    🔒 Acceso Admin
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // --- Initial Data (Defaults) ---
+        const defaultServices = [
+            { id: 1, name: "HBO Max", category: "streaming", color: "from-purple-800 to-blue-900", icon: "🎬", price: 10.00, official: 30.00 },
+            { id: 2, name: "Disney+", category: "streaming", color: "from-blue-700 to-blue-900", icon: "🏰", price: 12.00, official: 28.00 },
+            { id: 3, name: "Netflix", category: "streaming", color: "from-red-700 to-red-900", icon: "🍿", price: 15.00, official: 45.00 },
+            { id: 4, name: "Amazon Prime", category: "streaming", color: "from-blue-500 to-cyan-700", icon: "📦", price: 10.00, official: 20.00 },
+            { id: 5, name: "Crunchyroll", category: "anime", color: "from-orange-500 to-orange-700", icon: "🍙", price: 8.00, official: 19.00 },
+            { id: 6, name: "Apple TV+", category: "streaming", color: "from-gray-700 to-gray-900", icon: "🍎", price: 10.00, official: 25.00 },
+            { id: 7, name: "Paramount+", category: "streaming", color: "from-blue-600 to-blue-800", icon: "🏔️", price: 9.00, official: 15.00 },
+            { id: 8, name: "Universal+", category: "streaming", color: "from-purple-700 to-purple-900", icon: "🌍", price: 10.00, official: 25.00 },
+            { id: 9, name: "DIRECTV GO", category: "sports", color: "from-blue-800 to-blue-950", icon: "📡", price: 35.00, official: 69.00 },
+            { id: 10, name: "Liga 1 Max", category: "sports", color: "from-red-600 to-red-800", icon: "⚽", price: 25.00, official: 45.00 },
+            { id: 11, name: "Movistar Play", category: "sports", color: "from-green-600 to-green-800", icon: "📺", price: 15.00, official: 30.00 },
+            { id: 12, name: "YouTube Premium", category: "streaming", color: "from-red-600 to-red-800", icon: "▶️", price: 10.00, official: 21.00 },
+            { id: 13, name: "IPTV / Flujo TV", category: "sports", color: "from-indigo-600 to-indigo-900", icon: "🌐", price: 20.00, official: 50.00 },
+        ];
+
+        // --- State Management ---
+        let services = [];
+        let savingsChartInstance = null;
+        let contentChartInstance = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadServices();
+            renderServices(services);
+            renderAdminTable(); // Admin table
+            updateCharts();
+        });
+
+        // --- Data Persistence Functions ---
+        function loadServices() {
+            const stored = localStorage.getItem('streamServices');
+            if (stored) {
+                services = JSON.parse(stored);
+            } else {
+                services = JSON.parse(JSON.stringify(defaultServices)); // Deep copy
+            }
+        }
+
+        function saveServices() {
+            localStorage.setItem('streamServices', JSON.stringify(services));
+            renderServices(services);
+            renderAdminTable();
+            updateCharts();
+        }
+
+        function resetToDefault() {
+            if(confirm('¿Estás seguro de reiniciar todos los datos a fábrica?')) {
+                localStorage.removeItem('streamServices');
+                loadServices();
+                renderServices(services);
+                renderAdminTable();
+                updateCharts();
+                Swal.fire('Restaurado', 'Datos reiniciados con éxito', 'success');
+            }
+        }
+
+        // --- Admin Functions ---
+
+        // Toggle visibility
+        function toggleAdminPanel() {
+            const panel = document.getElementById('adminPanel');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                // Scroll to panel
+                panel.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        // Auth Simulation
+        function requestAdminAccess() {
+            Swal.fire({
+                title: 'Acceso Administrativo',
+                input: 'password',
+                inputLabel: 'Introduce la contraseña',
+                inputPlaceholder: 'admin123',
+                inputAttributes: {
+                    autocapitalize: 'off',
+                    autocorrect: 'off'
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Entrar',
+                showLoaderOnConfirm: true,
+                preConfirm: (login) => {
+                    if (login === 'admin123') {
+                        return true;
+                    } else {
+                        Swal.showValidationMessage('Contraseña incorrecta');
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('navAdminBtn').classList.remove('hidden');
+                    toggleAdminPanel();
+                    Swal.fire('Bienvenido', 'Modo edición activado', 'success');
+                }
+            })
+        }
+
+        // Add Product
+        function handleAddProduct(e) {
+            e.preventDefault();
+            const name = document.getElementById('pName').value;
+            const price = parseFloat(document.getElementById('pPrice').value);
+            const official = parseFloat(document.getElementById('pOfficial').value);
+            const category = document.getElementById('pCategory').value;
+            const icon = document.getElementById('pIcon').value;
+            const color = document.getElementById('pColor').value;
+
+            const newId = services.length > 0 ? Math.max(...services.map(s => s.id)) + 1 : 1;
+
+            const newService = {
+                id: newId,
+                name,
+                category,
+                color,
+                icon,
+                price,
+                official
+            };
+
+            services.push(newService);
+            saveServices();
+            
+            // Reset Form
+            document.getElementById('addProductForm').reset();
+            Swal.fire({
+                icon: 'success',
+                title: 'Agregado',
+                text: `${name} ha sido añadido al catálogo.`,
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+
+        // Delete Product
+        function deleteService(id) {
+            Swal.fire({
+                title: '¿Eliminar producto?',
+                text: "No podrás revertir esto",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, eliminar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    services = services.filter(s => s.id !== id);
+                    saveServices();
+                    Swal.fire('Eliminado', 'El producto ha sido eliminado.', 'success');
+                }
+            })
+        }
+
+        // Render Admin Table
+        function renderAdminTable() {
+            const tbody = document.getElementById('adminTableBody');
+            tbody.innerHTML = '';
+            services.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-700 bg-slate-800 hover:bg-slate-700';
+                tr.innerHTML = `
+                    <td class="px-4 py-3 text-lg">${s.icon}</td>
+                    <td class="px-4 py-3 font-medium text-white">${s.name}</td>
+                    <td class="px-4 py-3 text-cyan-400">S/ ${s.price.toFixed(2)}</td>
+                    <td class="px-4 py-3 text-right">
+                        <button onclick="deleteService(${s.id})" class="text-red-400 hover:text-red-200 transition">
+                            🗑️
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+
+        // --- Display Functions ---
+
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function contactWhatsApp(serviceName = '') {
+            const phone = "51999999999"; 
+            let text = "Hola! Me interesa adquirir una cuenta premium.";
+            if(serviceName) text = `Hola! Me interesa adquirir una cuenta de ${serviceName}.`;
+            const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank');
+        }
+
+        function filterServices(category) {
+            // Update buttons styling
+            const buttons = document.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('bg-cyan-600', 'text-white');
+                btn.classList.add('bg-slate-700', 'text-slate-300');
+            });
+            event.target.classList.remove('bg-slate-700', 'text-slate-300');
+            event.target.classList.add('bg-cyan-600', 'text-white');
+
+            if (category === 'all') {
+                renderServices(services);
+            } else {
+                const filtered = services.filter(s => s.category === category);
+                renderServices(filtered);
+            }
+        }
+
+        function renderServices(data) {
+            const grid = document.getElementById('serviceGrid');
+            grid.innerHTML = '';
+
+            data.forEach(service => {
+                const card = document.createElement('div');
+                card.className = "group relative bg-slate-700/30 rounded-xl overflow-hidden border border-slate-600 hover:border-cyan-400 transition duration-300 hover:shadow-lg hover:shadow-cyan-500/20 flex flex-col";
+                
+                card.innerHTML = `
+                    <div class="h-24 bg-gradient-to-br ${service.color} flex items-center justify-center relative overflow-hidden">
+                        <span class="text-4xl transform group-hover:scale-125 transition duration-500">${service.icon}</span>
+                        <div class="absolute top-2 right-2 bg-black/40 px-2 py-0.5 rounded text-xs text-white font-mono">HD/4K</div>
+                    </div>
+                    <div class="p-4 flex flex-col flex-grow">
+                        <h3 class="text-lg font-bold text-white mb-1">${service.name}</h3>
+                        <div class="flex justify-between items-end mt-auto">
+                            <div class="text-left">
+                                <span class="text-xs text-slate-400 line-through">S/ ${service.official.toFixed(2)}</span>
+                                <div class="text-cyan-400 font-bold text-xl">S/ ${service.price.toFixed(2)}</div>
+                            </div>
+                            <button onclick="contactWhatsApp('${service.name}')" class="bg-slate-600 hover:bg-green-600 text-white p-2 rounded-lg transition">
+                                🛒
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function highlightBadge(element) {
+            document.querySelectorAll('#stats .group').forEach(el => {
+                el.classList.remove('border-cyan-500', 'bg-slate-800');
+                el.classList.add('bg-slate-900', 'border-slate-700');
+            });
+            element.classList.remove('bg-slate-900', 'border-slate-700');
+            element.classList.add('bg-slate-800', 'border-cyan-500');
+        }
+
+        // --- Charts (Updated to support refresh) ---
+        function updateCharts() {
+            Chart.defaults.color = '#94a3b8';
+            Chart.defaults.font.family = "'Segoe UI', sans-serif";
+
+            // Destroy existing instances if they exist
+            if (savingsChartInstance) savingsChartInstance.destroy();
+            if (contentChartInstance) contentChartInstance.destroy();
+
+            // Prepare Data for Savings (Top 5 for cleaner look)
+            const comparisonData = services.slice(0, 5); 
+            const labels = comparisonData.map(s => s.name);
+            const ourPrices = comparisonData.map(s => s.price);
+            const officialPrices = comparisonData.map(s => s.official);
+
+            // Chart 1: Savings
+            const ctxSavings = document.getElementById('savingsChart').getContext('2d');
+            savingsChartInstance = new Chart(ctxSavings, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Precio Oficial',
+                            data: officialPrices,
+                            backgroundColor: 'rgba(148, 163, 184, 0.2)',
+                            borderColor: 'rgba(148, 163, 184, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Nuestro Precio',
+                            data: ourPrices,
+                            backgroundColor: 'rgba(34, 211, 238, 0.6)',
+                            borderColor: 'rgba(34, 211, 238, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // Prepare Data for Distribution
+            const categories = {};
+            services.forEach(s => {
+                categories[s.category] = (categories[s.category] || 0) + 1;
+            });
+            
+            const displayNames = {
+                'streaming': 'Películas & Series',
+                'anime': 'Anime',
+                'sports': 'Deportes / TV',
+                'music': 'Música'
+            };
+
+            // Chart 2: Content
+            const ctxContent = document.getElementById('contentChart').getContext('2d');
+            contentChartInstance = new Chart(ctxContent, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(categories).map(k => displayNames[k] || k),
+                    datasets: [{
+                        data: Object.values(categories),
+                        backgroundColor: [
+                            'rgba(168, 85, 247, 0.7)', // Purple
+                            'rgba(249, 115, 22, 0.7)', // Orange
+                            'rgba(34, 211, 238, 0.7)', // Cyan
+                            'rgba(34, 197, 94, 0.7)', // Green
+                        ],
+                        borderColor: '#1e293b',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
