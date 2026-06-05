@@ -75,7 +75,8 @@
             RefreshCw: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
             CloudUpload: '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>',
             Eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
-            EyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>'
+            EyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>',
+            Film: '<rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/>'
         };
 
         const SvgIcon = ({ name, className = "w-6 h-6", ...props }) => {
@@ -99,6 +100,10 @@
 
         const WHATSAPP_NUMBER = "51999999999";
         const API_URL = "https://script.google.com/macros/s/AKfycbzxRWOc6iWYDkYDAhsLh6HRDTyMzTrHYYyzCJGZMgw2yAW3zsN63ubw1VHhExHOvRJa/exec";
+        
+        // --- API TMDB: Para las películas automáticas ---
+        const TMDB_API_KEY = "3fd2be6f0c70a2a598f084ddfb75487c";
+        const TMDB_URL = `https://api.themoviedb.org/3/trending/movie/week?api_key=${TMDB_API_KEY}&language=es-ES`;
 
         const HERO_SLIDES = [
           { id: 1, video: "https://i.imgur.com/8NoEwnp.mp4" },
@@ -108,6 +113,7 @@
         const CATEGORIES = ["Todos", "Streaming", "Licencias", "IA", "Otros", "Zona Gammer"];
 
         // Función de ayuda para validar si un producto es visible
+        // La validación se queda aquí para que leas el estado directamente del Sheets
         const isProductVisible = (p) => {
             if (p.visible === false || p.visible === "false" || p.visible === "FALSE" || p.visible === 0 || p.visible === "0") return false;
             return true;
@@ -115,6 +121,7 @@
 
         function App() {
           const [products, setProducts] = useState([]);
+          const [trendingMovies, setTrendingMovies] = useState([]);
           const [isLoading, setIsLoading] = useState(true);
           const [isSaving, setIsSaving] = useState(false);
           const [dbStatus, setDbStatus] = useState('connecting');
@@ -136,7 +143,7 @@
           const [isEditing, setIsEditing] = useState(false);
           const [editingId, setEditingId] = useState(null);
           
-          // Se agrega el estado visible al nuevo producto
+          // Se mantiene limpio sin visibilidad acá para que no haya confusiones
           const [newProduct, setNewProduct] = useState({
             name: "", price: "", category: "Streaming", type: "", desc: "", iconName: "Tv", color: "from-blue-500 to-blue-800", label: "", image: "", puntos: 0, visible: true
           });
@@ -144,7 +151,10 @@
           const safeProducts = Array.isArray(products) ? products : [];
 
           useEffect(() => {
-            const fetchFromSheets = async () => {
+            const fetchAllData = async () => {
+              setIsLoading(true);
+              
+              // 1. Cargar tu catálogo desde Google Sheets
               try {
                 setDbStatus('connecting');
                 const response = await fetch(API_URL);
@@ -161,11 +171,24 @@
                 console.error("Error cargando de Sheets:", error);
                 setProducts([]);
                 setDbStatus('error');
-              } finally {
-                setIsLoading(false);
               }
+
+              // 2. Cargar Películas de TMDB Automáticamente
+              try {
+                const tmdbResponse = await fetch(TMDB_URL);
+                const tmdbResult = await tmdbResponse.json();
+                if (tmdbResult && tmdbResult.results) {
+                    setTrendingMovies(tmdbResult.results.slice(0, 6));
+                }
+              } catch(error) {
+                 console.error("Error cargando películas de TMDB:", error);
+                 setTrendingMovies([]);
+              }
+
+              setIsLoading(false);
             };
-            fetchFromSheets();
+
+            fetchAllData();
           }, []);
 
           const syncToSheets = async (updatedProductsArray) => {
@@ -206,14 +229,12 @@
             const puntosB = parseInt(b.puntos) || 0;
             return puntosB - puntosA; 
           });
-          
-          const recommendedProducts = sortedPublicProducts.slice(0, 4);
 
           const filteredProducts = activeCategory === "Todos" 
             ? sortedPublicProducts 
             : sortedPublicProducts.filter(p => p.category === activeCategory);
 
-          // FILTRO PARA EL ADMIN (Ve todos los productos)
+          // FILTRO PARA EL ADMIN (Ve todos los productos, ordenados)
           const sortedAdminProducts = [...safeProducts].sort((a, b) => {
             const puntosA = parseInt(a.puntos) || 0;
             const puntosB = parseInt(b.puntos) || 0;
@@ -317,26 +338,43 @@
             }
           };
 
-          // --- NUEVA FUNCIÓN: OCULTAR / MOSTRAR PRODUCTO ---
-          const handleToggleVisibility = (id) => {
-            const updatedProducts = safeProducts.map(p => {
-                if (p.id === id) {
-                    const isVisibleNow = isProductVisible(p);
-                    return { ...p, visible: !isVisibleNow };
-                }
-                return p;
-            });
-            setProducts(updatedProducts);
-            // Si lo ocultas, lo quitas del carrito de los clientes por si acaso
-            const hiddenProduct = updatedProducts.find(p => p.id === id);
-            if (!isProductVisible(hiddenProduct)) {
-                removeFromCart(id);
-            }
-            syncToSheets(updatedProducts);
-          };
-
           const scrollToCatalog = () => {
             document.getElementById("catalogo-premium")?.scrollIntoView({ behavior: 'smooth' });
+          };
+
+          // Función para renderizar las tarjetas de TMDB
+          const renderMovieCard = (movie) => {
+              const posterUrl = `https://image.tmdb.org/t/p/w500${movie.poster_path}`;
+              const rating = movie.vote_average ? movie.vote_average.toFixed(1) : "N/A";
+              
+              return (
+                  <div key={movie.id} className="group relative bg-[#12141c]/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col">
+                    <div className="absolute top-4 right-4 z-20 pointer-events-none">
+                        <span className="bg-yellow-500/90 backdrop-blur-md text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-lg">
+                            <SvgIcon name="Star" className="w-3 h-3 fill-black" /> {rating}
+                        </span>
+                    </div>
+                    
+                    <div className="h-64 w-full relative overflow-hidden bg-black flex-shrink-0">
+                        {movie.poster_path ? (
+                            <img src={posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90 group-hover:opacity-100" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-900"><SvgIcon name="Film" className="w-12 h-12 text-white/30" /></div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#12141c] to-transparent"></div>
+                    </div>
+                    
+                    <div className="p-5 flex-1 flex flex-col relative z-20 bg-[#12141c] -mt-10">
+                        <h4 className="text-lg font-bold text-white leading-tight mb-2 line-clamp-1 group-hover:text-purple-400 transition-colors" title={movie.title}>{movie.title}</h4>
+                        <p className="text-xs text-gray-400 line-clamp-3 mb-4">{movie.overview || "Sin descripción disponible."}</p>
+                        <div className="mt-auto">
+                            <button onClick={scrollToCatalog} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-xs transition-all text-gray-300">
+                                <SvgIcon name="Play" className="w-4 h-4 fill-gray-300" /> Ver Planes Premium
+                            </button>
+                        </div>
+                    </div>
+                  </div>
+              );
           };
 
           return (
@@ -371,7 +409,7 @@
                 <main className="pt-40 pb-20 container mx-auto px-6 lg:px-12 relative z-10 min-h-screen">
                   <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6">
                     <div>
-                        <h2 className="text-3xl md:text-4xl font-black mb-2 flex items-center gap-3"><SvgIcon name="Settings" className="w-8 h-8 text-purple-500" />Panel de Administración</h2>
+                        <h2 className="text-3xl md:text-4xl font-black mb-2 flex items-center gap-3 text-white"><SvgIcon name="Settings" className="w-8 h-8 text-purple-500" />Panel de Administración</h2>
                         <p className="text-gray-400">Agrega, edita, oculta y organiza tu catálogo en tiempo real.</p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -381,10 +419,10 @@
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* FORMULARIO */}
+                    {/* FORMULARIO SIMPLE (SIN SWITCH DE VISIBILIDAD) */}
                     <div className="bg-[#12141c] border border-white/10 rounded-3xl p-6 lg:col-span-1 h-fit shadow-2xl relative overflow-hidden">
                       {isEditing && <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>}
-                      <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                      <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
                         {isEditing ? <SvgIcon name="Edit3" className="w-5 h-5 text-blue-500" /> : <SvgIcon name="PlusCircle" className="w-5 h-5 text-green-500" />}
                         {isEditing ? "Editar Producto" : "Añadir Nuevo Producto"}
                       </h3>
@@ -434,9 +472,9 @@
                       </form>
                     </div>
 
-                    {/* LISTA ADMIN CON BOTÓN DE VISIBILIDAD */}
+                    {/* LISTA ADMIN LIMPIA (SIN VISIBILIDAD) */}
                     <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-3xl p-6 overflow-hidden flex flex-col h-fit max-h-[800px]">
-                      <h3 className="text-xl font-bold mb-6 flex items-center justify-between">Productos en Tienda<span className="bg-purple-600/30 text-purple-400 text-xs px-3 py-1 rounded-full">{safeProducts.length} Items</span></h3>
+                      <h3 className="text-xl font-bold mb-6 flex items-center justify-between text-white">Productos en Tienda<span className="bg-purple-600/30 text-purple-400 text-xs px-3 py-1 rounded-full">{safeProducts.length} Items</span></h3>
                       <div className="overflow-y-auto pr-2 hide-scrollbar flex-1 flex flex-col gap-3">
                         {sortedAdminProducts.map(p => {
                           const isVisible = isProductVisible(p);
@@ -458,11 +496,8 @@
                             <div className="flex items-center gap-6">
                               <div className="flex flex-col items-end"><span className="font-black text-white">S/{p.price}</span><span className="text-[10px] text-yellow-500 flex items-center gap-1"><SvgIcon name="Star" className="w-3 h-3" /> {p.puntos || 0} pts</span></div>
                               <div className="flex gap-1">
-                                <button onClick={() => handleToggleVisibility(p.id)} disabled={isSaving} className={`p-2 rounded-full transition-colors ${isVisible ? 'text-gray-500 hover:text-orange-400 hover:bg-orange-500/10' : 'text-orange-500 bg-orange-500/10 hover:bg-orange-500/20'}`} title={isVisible ? "Ocultar producto de la tienda" : "Hacer visible en la tienda"}>
-                                    <SvgIcon name={isVisible ? "Eye" : "EyeOff"} className="w-5 h-5" />
-                                </button>
-                                <button onClick={() => handleEditClick(p)} disabled={isSaving} className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-full transition-colors" title="Editar"><SvgIcon name="Edit3" className="w-5 h-5" /></button>
-                                <button onClick={() => handleDeleteProduct(p.id)} disabled={isSaving} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors" title="Eliminar por completo"><SvgIcon name="Trash2" className="w-5 h-5" /></button>
+                                <button type="button" onClick={() => handleEditClick(p)} disabled={isSaving} className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-full transition-colors" title="Editar"><SvgIcon name="Edit3" className="w-5 h-5" /></button>
+                                <button type="button" onClick={() => handleDeleteProduct(p.id)} disabled={isSaving} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors" title="Eliminar por completo"><SvgIcon name="Trash2" className="w-5 h-5" /></button>
                               </div>
                             </div>
                           </div>
@@ -474,11 +509,12 @@
                 </main>
               ) : (
                 <>
-                  {/* HERO VIDEOS (MÁS PEQUEÑO / PANORÁMICO) */}
-                  <section className="relative h-[55vh] md:h-[60vh] w-full overflow-hidden flex items-center mt-20">
+                  {/* HERO VIDEOS (PEGADO AL TECHO) */}
+                  {/* Se eliminó el "mt-20" para que no haya espacio vacío arriba */}
+                  <section className="relative h-[45vh] md:h-[50vh] w-full overflow-hidden flex items-center">
                     {HERO_SLIDES.map((slide, index) => (
                       <div key={slide.id} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] via-transparent to-[#0a0a0c]/80 z-20 pointer-events-none"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] via-transparent to-transparent z-20 pointer-events-none"></div>
                         <video src={slide.video} autoPlay muted loop playsInline className={`w-full h-full object-cover transition-transform duration-[25000ms] ${index === currentSlide ? 'scale-110' : 'scale-100'}`}></video>
                         <div className="absolute bottom-12 left-0 w-full z-30 flex justify-center">
                           <button onClick={scrollToCatalog} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:scale-105 transition-all shadow-[0_0_30px_rgba(139,92,246,0.6)] animate-bounce">
@@ -489,158 +525,111 @@
                     ))}
                   </section>
 
-                  {/* NUEVA SECCIÓN: RECOMENDADOS DEL MES */}
-                  {!isLoading && recommendedProducts.length > 0 && (
-                      <section className="pt-12 pb-4 container mx-auto px-6 lg:px-12 relative z-10">
-                          <h3 className="text-2xl md:text-3xl font-black mb-6 flex items-center gap-3">
-                              <SvgIcon name="Sparkles" className="w-7 h-7 text-purple-500" /> 
-                              Recomendados del Mes
-                          </h3>
-                          
-                          {/* Fila deslizable */}
-                          <div className="flex overflow-x-auto gap-6 pb-6 hide-scrollbar snap-x">
-                              {recommendedProducts.map((product) => (
-                                  <div key={`rec-${product.id}`} className="min-w-[280px] md:min-w-[320px] snap-start group relative bg-[#12141c]/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(168,85,247,0.2)] flex flex-col">
-                                      {product.label && (
-                                        <div className="absolute top-4 right-4 z-20 pointer-events-none"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${product.label === 'TOP' ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg' : product.label === 'OFERTA' ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg' : product.label === 'NUEVO' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg' : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'}`}>{product.label}</span></div>
-                                      )}
-                                      
-                                      <div onClick={() => setSelectedProduct(product)} className={`h-32 w-full relative overflow-hidden flex items-center justify-center cursor-pointer ${!product.image ? `bg-gradient-to-br ${product.color || 'from-gray-800 to-black'}` : 'bg-black'}`}>
-                                        {product.image ? (
-                                          <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                                        ) : (
-                                          <><div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-300"></div><SvgIcon name={product.iconName} className="w-12 h-12 text-white/90 drop-shadow-2xl group-hover:scale-110 transition-transform duration-500 relative z-10" /></>
-                                        )}
-                                      </div>
-                                      
-                                      <div className="p-5 flex-1 flex flex-col relative z-20 bg-[#12141c]/80 backdrop-blur-md">
-                                        <div className="cursor-pointer group/text" onClick={() => setSelectedProduct(product)}>
-                                          <h4 className="text-lg font-bold leading-tight group-hover/text:text-purple-400 transition-colors mb-1 truncate">{product.name}</h4>
-                                          <span className="text-[11px] text-gray-400 font-medium mb-3 flex items-center gap-1"><SvgIcon name="CheckCircle2" className="w-3 h-3 text-purple-500" /> {product.type}</span>
-                                        </div>
-                                        
-                                        <div className="mt-auto border-t border-white/5 pt-3">
-                                          <div className="flex items-center justify-between mb-3">
-                                            <span className="text-xl font-black text-white">S/{product.price}</span>
-                                          </div>
-                                          
-                                          <div className="flex gap-2 w-full">
-                                            <button onClick={() => handleDirectWhatsAppBuy(product)} className="flex-1 bg-[#25D366] hover:bg-[#1ebd5a] text-white py-2 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[12px] transition-all">
-                                              <IconWhatsApp /> Directo
-                                            </button>
-                                            
-                                            {cart.find(item => item.product.id === product.id) ? (
-                                              <div className="flex-1 flex items-center justify-between bg-white/10 rounded-xl px-2 py-1.5 border border-white/10">
-                                                <button onClick={() => updateQuantity(product.id, -1)} className="p-1 hover:text-purple-400 transition-colors"><SvgIcon name="Minus" className="w-4 h-4" /></button>
-                                                <span className="font-bold text-xs w-4 text-center">{cart.find(item => item.product.id === product.id).quantity}</span>
-                                                <button onClick={() => updateQuantity(product.id, 1)} className="p-1 hover:text-purple-400 transition-colors"><SvgIcon name="Plus" className="w-4 h-4" /></button>
-                                              </div>
-                                            ) : (
-                                              <button onClick={() => addToCart(product)} className="flex-1 bg-white/5 hover:bg-purple-600 border border-white/10 hover:border-purple-500 text-white py-2 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[12px] transition-all">
-                                                <IconCart /> Agregar
-                                              </button>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                  </div>
-                              ))}
-                          </div>
-                      </section>
-                  )}
-
-                  {/* BARRA INTERACTIVA Y CATÁLOGO PREMIUM */}
-                  <section id="catalogo-premium" className="pt-10 pb-20 container mx-auto px-6 lg:px-12 min-h-[50vh] relative z-10">
+                  <section id="catalogo-premium" className="pt-10 pb-6 container mx-auto px-6 lg:px-12 relative z-10">
                     
-                    {/* BARRA DE HERRAMIENTAS (BAJO EL VIDEO Y RECOMENDADOS) */}
-                    <div className="flex flex-col gap-6 mb-12 border-t border-white/10 pt-10">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <h3 className="text-3xl md:text-4xl font-black flex items-center gap-3">
-                                    Catálogo Completo <SvgIcon name="Star" className="w-6 h-6 text-yellow-500 fill-yellow-500" />
-                                </h3>
-                                <p className="text-gray-400 mt-1">Explora todos nuestros servicios disponibles</p>
-                            </div>
+                    {/* SECCIÓN AUTOMÁTICA TMDB: PELÍCULAS DEL MES */}
+                    {!isLoading && activeCategory === "Todos" && trendingMovies.length > 0 && (
+                        <div className="mb-14 animate-[slideIn_0.3s_ease-out]">
+                            <h3 className="text-2xl md:text-3xl font-black mb-6 flex items-center gap-3 text-white">
+                                <SvgIcon name="Film" className="w-7 h-7 text-yellow-500" /> 
+                                Las Mejores Películas del Mes
+                            </h3>
+                            <p className="text-gray-400 mb-6 text-sm">Disfruta de estos estrenos y títulos populares contratando nuestras pantallas premium.</p>
                             
-                            {/* ESTADO DE CONEXIÓN */}
-                            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 w-fit">
-                                <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : dbStatus === 'error' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] animate-pulse' : 'bg-yellow-500 animate-pulse'}`}></div>
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                                    {dbStatus === 'connected' ? 'Conectado' : dbStatus === 'error' ? 'Error API' : 'Sincronizando'}
-                                </span>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                {trendingMovies.map(renderMovieCard)}
                             </div>
+                            <div className="mt-12 mb-6 border-t border-white/10"></div>
                         </div>
+                    )}
 
-                        {/* CATEGORÍAS TIPO TABS INTERACTIVOS */}
-                        <div className="flex flex-nowrap overflow-x-auto pb-2 gap-3 hide-scrollbar w-full">
-                            {CATEGORIES.map(cat => (
-                                <button 
-                                    key={cat} 
-                                    onClick={() => setActiveCategory(cat)} 
-                                    className={`whitespace-nowrap px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeCategory === cat ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-[0_0_20px_rgba(139,92,246,0.4)] scale-105' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'}`}
-                                >
-                                    {cat}
-                                </button>
-                            ))}
+                    <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6 border-b border-white/10 pb-6">
+                      <div>
+                        <h3 className="text-3xl md:text-4xl font-black mb-2 flex items-center gap-3 text-white">
+                            Catálogo Premium <SvgIcon name="Sparkles" className="w-6 h-6 text-purple-500" />
+                        </h3>
+                        <p className="text-gray-400">Selecciona el servicio que deseas adquirir</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
+                          <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : dbStatus === 'error' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] animate-pulse' : 'bg-yellow-500 animate-pulse'}`}></div>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                            {dbStatus === 'connected' ? 'Conectado' : dbStatus === 'error' ? 'Error API' : 'Sincronizando'}
+                          </span>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-nowrap overflow-x-auto pb-6 gap-3 hide-scrollbar w-full mb-6">
+                      {CATEGORIES.map((item) => (
+                        <button 
+                            key={item} 
+                            onClick={() => setActiveCategory(item)} 
+                            className={`whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold uppercase tracking-wide transition-all border ${activeCategory === item ? 'bg-purple-600 text-white border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                        >
+                            {item}
+                        </button>
+                      ))}
                     </div>
 
                     {isLoading ? (
                       <div className="flex flex-col items-center justify-center py-20 text-purple-500">
                         <SvgIcon name="RefreshCw" className="w-12 h-12 animate-spin mb-4" />
-                        <p className="font-bold">Conectando con la base de datos...</p>
+                        <p className="font-bold text-white">Conectando con la base de datos...</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {filteredProducts.map((product) => (
-                          <div key={product.id} className="group relative bg-[#12141c]/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col">
-                            {product.label && (
-                              <div className="absolute top-4 right-4 z-20 pointer-events-none"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${product.label === 'TOP' ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg' : product.label === 'OFERTA' ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg' : product.label === 'NUEVO' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg' : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'}`}>{product.label}</span></div>
-                            )}
-                            
-                            <div onClick={() => setSelectedProduct(product)} className={`h-40 w-full relative overflow-hidden flex items-center justify-center cursor-pointer ${!product.image ? `bg-gradient-to-br ${product.color || 'from-gray-800 to-black'}` : 'bg-black'}`}>
-                              {product.image ? (
-                                <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                              ) : (
-                                <><div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-300"></div><SvgIcon name={product.iconName} className="w-16 h-16 text-white/90 drop-shadow-2xl group-hover:scale-110 transition-transform duration-500 relative z-10" /><div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div></>
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                          {filteredProducts.map((product) => (
+                            <div key={product.id} className="group relative bg-[#12141c]/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col">
+                              {product.label && (
+                                <div className="absolute top-4 right-4 z-20 pointer-events-none"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-white ${product.label === 'TOP' ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-lg' : product.label === 'OFERTA' ? 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg' : product.label === 'NUEVO' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg' : 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-lg'}`}>{product.label}</span></div>
                               )}
-                            </div>
-                            
-                            <div className="p-6 flex-1 flex flex-col relative z-20 bg-[#12141c]/80 backdrop-blur-md">
-                              <div className="cursor-pointer group/text" onClick={() => setSelectedProduct(product)}>
-                                <h4 className="text-lg font-bold leading-tight group-hover/text:text-purple-400 transition-colors mb-2">{product.name}</h4>
-                                <span className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-1"><SvgIcon name="CheckCircle2" className="w-3 h-3 text-purple-500" /> {product.type}</span>
-                                <p className="text-sm text-gray-500 mb-3 flex-1 line-clamp-2">{product.desc}</p>
-                                <span className="text-xs text-purple-400 font-bold hover:underline mb-4 inline-block">Ver información completa</span>
+                              
+                              <div onClick={() => setSelectedProduct(product)} className={`h-40 w-full relative overflow-hidden flex items-center justify-center cursor-pointer ${!product.image ? `bg-gradient-to-br ${product.color || 'from-gray-800 to-black'}` : 'bg-black'}`}>
+                                {product.image ? (
+                                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                                ) : (
+                                  <><div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-300"></div><SvgIcon name={product.iconName} className="w-16 h-16 text-white/90 drop-shadow-2xl group-hover:scale-110 transition-transform duration-500 relative z-10" /><div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div></>
+                                )}
                               </div>
                               
-                              <div className="mt-auto border-t border-white/5 pt-4">
-                                <div className="flex items-center justify-between mb-4">
-                                  <div className="flex flex-col"><span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Precio</span><span className="text-2xl font-black text-white">S/{product.price}</span></div>
+                              <div className="p-6 flex-1 flex flex-col relative z-20 bg-[#12141c]/80 backdrop-blur-md">
+                                <div className="cursor-pointer group/text" onClick={() => setSelectedProduct(product)}>
+                                  <h4 className="text-lg font-bold text-white leading-tight group-hover/text:text-purple-400 transition-colors mb-2">{product.name}</h4>
+                                  <span className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-1"><SvgIcon name="CheckCircle2" className="w-3 h-3 text-purple-500" /> {product.type}</span>
+                                  <p className="text-sm text-gray-500 mb-3 flex-1 line-clamp-2">{product.desc}</p>
+                                  <span className="text-xs text-purple-400 font-bold hover:underline mb-4 inline-block">Ver información completa</span>
                                 </div>
                                 
-                                <div className="flex gap-2 w-full">
-                                  <button onClick={() => handleDirectWhatsAppBuy(product)} className="flex-1 bg-[#25D366] hover:bg-[#1ebd5a] text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all shadow-[0_0_10px_rgba(37,211,102,0.2)]">
-                                    <IconWhatsApp /> WhatsApp
-                                  </button>
+                                <div className="mt-auto border-t border-white/5 pt-4">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div className="flex flex-col"><span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Precio</span><span className="text-2xl font-black text-white">S/{product.price}</span></div>
+                                  </div>
                                   
-                                  {cart.find(item => item.product.id === product.id) ? (
-                                    <div className="flex-1 flex items-center justify-between bg-white/10 rounded-xl px-2 py-2 border border-white/10">
-                                      <button onClick={() => updateQuantity(product.id, -1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Minus" className="w-4 h-4" /></button>
-                                      <span className="font-bold text-sm w-4 text-center">{cart.find(item => item.product.id === product.id).quantity}</span>
-                                      <button onClick={() => updateQuantity(product.id, 1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Plus" className="w-4 h-4" /></button>
-                                    </div>
-                                  ) : (
-                                    <button onClick={() => addToCart(product)} className="flex-1 bg-white/5 hover:bg-purple-600 border border-white/10 hover:border-purple-500 text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all">
-                                      <IconCart /> Al Carrito
+                                  <div className="flex gap-2 w-full">
+                                    <button onClick={() => handleDirectWhatsAppBuy(product)} className="flex-1 bg-[#25D366] hover:bg-[#1ebd5a] text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all shadow-[0_0_10px_rgba(37,211,102,0.2)]">
+                                      <IconWhatsApp /> WhatsApp
                                     </button>
-                                  )}
+                                    
+                                    {cart.find(item => String(item.product.id) === String(product.id)) ? (
+                                      <div className="flex-1 flex items-center justify-between bg-white/10 rounded-xl px-2 py-2 border border-white/10">
+                                        <button onClick={() => updateQuantity(product.id, -1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Minus" className="w-4 h-4" /></button>
+                                        <span className="font-bold text-sm text-white w-4 text-center">{cart.find(item => String(item.product.id) === String(product.id)).quantity}</span>
+                                        <button onClick={() => updateQuantity(product.id, 1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Plus" className="w-4 h-4" /></button>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => addToCart(product)} className="flex-1 bg-white/5 hover:bg-purple-600 border border-white/10 hover:border-purple-500 text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all">
+                                        <IconCart /> Al Carrito
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </section>
 
@@ -653,7 +642,7 @@
                     </div>
                   </footer>
 
-                  {/* CARRITO FLOTANTE UNIVERSAL (Visible en PC y Móvil al agregar productos) */}
+                  {/* CARRITO FLOTANTE */}
                   {getCartCount() > 0 && (
                     <button onClick={() => setIsCartOpen(true)} className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-full shadow-[0_0_30px_rgba(139,92,246,0.5)] animate-bounce hover:scale-105 transition-transform group">
                       <div className="relative">
@@ -670,8 +659,8 @@
                       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCartOpen(false)}></div>
                       <div className="relative w-full max-w-md bg-[#0f1115] h-full shadow-2xl flex flex-col border-l border-white/10 animate-[slideIn_0.3s_ease-out]">
                         <div className="flex items-center justify-between p-6 border-b border-white/10">
-                          <h2 className="text-xl font-bold flex items-center gap-2"><SvgIcon name="ShoppingCart" className="w-6 h-6 text-purple-500" />Tu Pedido</h2>
-                          <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><SvgIcon name="X" className="w-6 h-6" /></button>
+                          <h2 className="text-xl font-bold flex items-center gap-2 text-white"><SvgIcon name="ShoppingCart" className="w-6 h-6 text-purple-500" />Tu Pedido</h2>
+                          <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-white/10 text-white rounded-full transition-colors"><SvgIcon name="X" className="w-6 h-6" /></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 hide-scrollbar">
                           {cart.length === 0 ? (
@@ -682,10 +671,10 @@
                                 <div className={`w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br ${item.product.color || 'from-gray-800 to-black'} flex items-center justify-center flex-shrink-0 relative`}>
                                    {item.product.image ? <img src={item.product.image} className="w-full h-full object-cover" alt="" /> : <SvgIcon name={item.product.iconName} className="w-6 h-6 text-white" />}
                                 </div>
-                                <div className="flex-1"><h4 className="font-bold text-sm line-clamp-1">{item.product.name}</h4><p className="text-purple-400 font-bold text-sm">S/{item.product.price * item.quantity}</p></div>
+                                <div className="flex-1"><h4 className="font-bold text-sm text-white line-clamp-1">{item.product.name}</h4><p className="text-purple-400 font-bold text-sm">S/{item.product.price * item.quantity}</p></div>
                                 <div className="flex items-center gap-3 bg-black/40 rounded-full px-2 py-1">
                                   <button onClick={() => updateQuantity(item.product.id, -1)} className="p-1 hover:text-white text-gray-400"><SvgIcon name="Minus" className="w-3 h-3" /></button>
-                                  <span className="font-bold text-sm w-4 text-center">{item.quantity}</span>
+                                  <span className="font-bold text-sm text-white w-4 text-center">{item.quantity}</span>
                                   <button onClick={() => updateQuantity(item.product.id, 1)} className="p-1 hover:text-white text-gray-400"><SvgIcon name="Plus" className="w-3 h-3" /></button>
                                 </div>
                                 <button onClick={() => removeFromCart(item.product.id)} className="p-2 text-red-500 hover:bg-red-500/20 rounded-full transition-colors"><SvgIcon name="Trash2" className="w-4 h-4" /></button>
@@ -695,7 +684,7 @@
                         </div>
                         {cart.length > 0 && (
                           <div className="p-6 border-t border-white/10 bg-[#0a0a0c]">
-                            <div className="flex justify-between items-center mb-6"><span className="text-gray-400">Total a pagar</span><span className="text-3xl font-black">S/{getCartTotal()}</span></div>
+                            <div className="flex justify-between items-center mb-6"><span className="text-gray-400">Total a pagar</span><span className="text-3xl font-black text-white">S/{getCartTotal()}</span></div>
                             <button onClick={handleWhatsAppCheckout} className="w-full bg-[#25D366] hover:bg-[#1ebd5a] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(37,211,102,0.3)] transition-all hover:scale-[1.02]"><IconWhatsApp /> Enviar pedido</button>
                           </div>
                         )}
@@ -703,7 +692,7 @@
                     </div>
                   )}
 
-                  {/* MODAL / VENTANA DE DETALLES DEL PRODUCTO */}
+                  {/* MODAL DEL PRODUCTO */}
                   {selectedProduct && (
                     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 sm:p-6">
                         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedProduct(null)}></div>
@@ -750,10 +739,10 @@
                                             <IconWhatsApp /> Comprar Ahora
                                         </button>
                                         
-                                        {cart.find(item => item.product.id === selectedProduct.id) ? (
+                                        {cart.find(item => String(item.product.id) === String(selectedProduct.id)) ? (
                                             <div className="flex-1 flex items-center justify-between bg-white/10 rounded-xl px-4 py-3 sm:py-4 border border-white/10">
                                                 <button onClick={() => updateQuantity(selectedProduct.id, -1)} className="p-2 hover:text-purple-400 transition-colors"><SvgIcon name="Minus" className="w-5 h-5" /></button>
-                                                <span className="font-bold text-lg w-8 text-center">{cart.find(item => item.product.id === selectedProduct.id).quantity}</span>
+                                                <span className="font-bold text-lg w-8 text-white text-center">{cart.find(item => String(item.product.id) === String(selectedProduct.id)).quantity}</span>
                                                 <button onClick={() => updateQuantity(selectedProduct.id, 1)} className="p-2 hover:text-purple-400 transition-colors"><SvgIcon name="Plus" className="w-5 h-5" /></button>
                                             </div>
                                         ) : (
@@ -776,7 +765,7 @@
                   <div className="bg-[#12141c] border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative">
                     <button onClick={() => setShowPasswordModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><SvgIcon name="X" className="w-5 h-5" /></button>
                     <div className="flex justify-center mb-6"><div className="p-4 bg-purple-500/20 rounded-full"><SvgIcon name="Lock" className="w-8 h-8 text-purple-500" /></div></div>
-                    <h3 className="text-xl font-bold text-center mb-2">Acceso Restringido</h3>
+                    <h3 className="text-xl font-bold text-white text-center mb-2">Acceso Restringido</h3>
                     <form onSubmit={handleAdminLogin}>
                       <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} placeholder="Contraseña" required className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center tracking-widest focus:outline-none focus:border-purple-500 mb-4" />
                       <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl transition-all">Desbloquear</button>
@@ -790,7 +779,6 @@
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } 
                 @keyframes slideIn { from { transform: translateY(20px); opacity: 0;} to { transform: translateY(0); opacity: 1;} }
                 
-                /* --- ANIMACIONES DEL FONDO NEÓN AURORAS + RAYOS NEÓN --- */
                 .bg-grid {
                     background-size: 50px 50px;
                     background-image: linear-gradient(to right, rgba(168, 85, 247, 0.25) 1px, transparent 1px),
@@ -799,34 +787,19 @@
                     -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 5%, rgba(0,0,0,0) 90%);
                     animation: moveGrid 3s linear infinite;
                 }
-                
                 @keyframes moveGrid {
                     0% { transform: translateY(0); }
                     100% { transform: translateY(50px); }
                 }
 
-                /* Auroras Boreales: Formas ovaladas y fluidas que se estiran y rotan */
-                @keyframes aurora-wave-1 {
-                    0% { transform: rotate(0deg) scaleX(1) translateY(0); opacity: 0.5; }
-                    50% { transform: rotate(5deg) scaleX(1.2) translateY(5vh); opacity: 0.8; }
-                    100% { transform: rotate(0deg) scaleX(1) translateY(0); opacity: 0.5; }
-                }
-                @keyframes aurora-wave-2 {
-                    0% { transform: rotate(0deg) scaleY(1) translateX(0); opacity: 0.6; }
-                    50% { transform: rotate(-5deg) scaleY(1.3) translateX(-5vw); opacity: 0.9; }
-                    100% { transform: rotate(0deg) scaleY(1) translateX(0); opacity: 0.6; }
-                }
-                @keyframes aurora-wave-3 {
-                    0% { transform: rotate(2deg) scale(1) translateY(0); }
-                    50% { transform: rotate(-2deg) scale(1.1) translateY(-5vh); opacity: 0.7;}
-                    100% { transform: rotate(2deg) scale(1) translateY(0); }
-                }
+                @keyframes aurora-wave-1 { 0% { transform: rotate(0deg) scaleX(1) translateY(0); opacity: 0.5; } 50% { transform: rotate(5deg) scaleX(1.2) translateY(5vh); opacity: 0.8; } 100% { transform: rotate(0deg) scaleX(1) translateY(0); opacity: 0.5; } }
+                @keyframes aurora-wave-2 { 0% { transform: rotate(0deg) scaleY(1) translateX(0); opacity: 0.6; } 50% { transform: rotate(-5deg) scaleY(1.3) translateX(-5vw); opacity: 0.9; } 100% { transform: rotate(0deg) scaleY(1) translateX(0); opacity: 0.6; } }
+                @keyframes aurora-wave-3 { 0% { transform: rotate(2deg) scale(1) translateY(0); } 50% { transform: rotate(-2deg) scale(1.1) translateY(-5vh); opacity: 0.7;} 100% { transform: rotate(2deg) scale(1) translateY(0); } }
 
                 .aurora-1 { animation: aurora-wave-1 15s infinite ease-in-out; }
                 .aurora-2 { animation: aurora-wave-2 20s infinite ease-in-out; }
                 .aurora-3 { animation: aurora-wave-3 18s infinite ease-in-out alternate; }
                 
-                /* Rayos Neón rápidos que hacen "Caminos" */
                 .shooting-neon {
                     position: absolute;
                     left: -20vw;
