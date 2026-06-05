@@ -30,7 +30,7 @@
                             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500">
                                 <span className="text-red-500 text-3xl font-black">!</span>
                             </div>
-                            <h1 className="text-red-500 text-3xl font-bold mb-4">Algo impidió cargar la tienda</h1>
+                            <h1 className="text-red-500 text-3xl font-bold mb-4">Error en la tienda</h1>
                             <pre className="bg-gray-900 p-6 rounded-xl text-red-400 w-full max-w-2xl overflow-auto text-left text-sm border border-white/10 shadow-2xl">
                                 {this.state.error && this.state.error.toString()}
                             </pre>
@@ -98,24 +98,26 @@
             </svg>
         );
 
-        const WHATSAPP_NUMBER = "51999999999";
+        const WHATSAPP_NUMBER = "51987659937";
         const API_URL = "https://script.google.com/macros/s/AKfycbzxRWOc6iWYDkYDAhsLh6HRDTyMzTrHYYyzCJGZMgw2yAW3zsN63ubw1VHhExHOvRJa/exec";
         
         // --- API TMDB: Para las películas automáticas ---
         const TMDB_API_KEY = "3fd2be6f0c70a2a598f084ddfb75487c";
         const TMDB_URL = `https://api.themoviedb.org/3/trending/movie/week?api_key=${TMDB_API_KEY}&language=es-ES`;
 
+        // 🎬 TUS TRÁILERS (Aquí pegas los 3 links)
         const HERO_SLIDES = [
-          { id: 1, video: "https://i.imgur.com/8NoEwnp.mp4" },
-          { id: 2, video: "https://i.imgur.com/8plsPrx_lq.mp4" }
+          { id: 1, video: "https://i.imgur.com/8NoEwnp_lq.mp4" },
+          { id: 2, video: "https://i.imgur.com/8plsPrx_lq.mp4" },
+          { id: 3, video: "AQUI_PEGA_TU_TERCER_LINK_MP4" }
         ];
 
         const CATEGORIES = ["Todos", "Streaming", "Licencias", "IA", "Otros", "Zona Gammer"];
 
-        // Función de ayuda para validar si un producto es visible
-        // La validación se queda aquí para que leas el estado directamente del Sheets
+        // Función blindada de validación de visibilidad
         const isProductVisible = (p) => {
-            if (p.visible === false || p.visible === "false" || p.visible === "FALSE" || p.visible === 0 || p.visible === "0") return false;
+            if (!p) return false;
+            if (p.visible === false || String(p.visible).toUpperCase() === "FALSE" || p.visible === 0 || p.visible === "0") return false;
             return true;
         };
 
@@ -129,7 +131,6 @@
           const [activeCategory, setActiveCategory] = useState("Todos");
           const [currentSlide, setCurrentSlide] = useState(0);
           const [isScrolled, setIsScrolled] = useState(false);
-          const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
           
           const [cart, setCart] = useState([]);
           const [isCartOpen, setIsCartOpen] = useState(false);
@@ -143,13 +144,12 @@
           const [isEditing, setIsEditing] = useState(false);
           const [editingId, setEditingId] = useState(null);
           
-          // Se mantiene limpio sin visibilidad acá para que no haya confusiones
+          // Formulario limpio (visibilidad y destacado incluidos de forma segura)
           const [newProduct, setNewProduct] = useState({
-            name: "", price: "", category: "Streaming", type: "", desc: "", iconName: "Tv", color: "from-blue-500 to-blue-800", label: "", image: "", puntos: 0, visible: true
+            name: "", price: "", category: "Streaming", type: "", desc: "", iconName: "Tv", color: "from-blue-500 to-blue-800", label: "", image: "", puntos: 0, visible: true, recomendado: false
           });
 
-          const safeProducts = Array.isArray(products) ? products : [];
-
+          // Carga inicial (Google Sheets + Películas TMDB)
           useEffect(() => {
             const fetchAllData = async () => {
               setIsLoading(true);
@@ -161,14 +161,18 @@
                 const result = await response.json();
                 
                 if (result && result.status === "success" && Array.isArray(result.data)) {
-                  setProducts(result.data);
+                  const parsedData = result.data.map(p => ({
+                      ...p,
+                      visible: isProductVisible(p),
+                      recomendado: p.recomendado === true || String(p.recomendado).toUpperCase() === "TRUE"
+                  }));
+                  setProducts(parsedData);
                   setDbStatus('connected');
                 } else {
                   setProducts([]); 
                   setDbStatus('error');
                 }
               } catch (error) {
-                console.error("Error cargando de Sheets:", error);
                 setProducts([]);
                 setDbStatus('error');
               }
@@ -181,7 +185,7 @@
                     setTrendingMovies(tmdbResult.results.slice(0, 6));
                 }
               } catch(error) {
-                 console.error("Error cargando películas de TMDB:", error);
+                 console.error("Error cargando películas TMDB:", error);
                  setTrendingMovies([]);
               }
 
@@ -191,19 +195,36 @@
             fetchAllData();
           }, []);
 
+          // Sincronización Blindada de 13 columnas exactas para no dañar tu Excel
           const syncToSheets = async (updatedProductsArray) => {
             setIsSaving(true);
             setDbStatus('connecting');
+
+            const strictProducts = updatedProductsArray.map(p => ({
+                id: p.id,
+                name: p.name || "",
+                price: p.price || "",
+                category: p.category || "Streaming",
+                type: p.type || "",
+                desc: p.desc || "",
+                iconName: p.iconName || "Tv",
+                color: p.color || "from-blue-500 to-blue-800",
+                label: p.label || "",
+                image: p.image || "",
+                puntos: parseInt(p.puntos) || 0,
+                recomendado: p.recomendado === true,
+                visible: p.visible !== false
+            }));
+
             try {
               await fetch(API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: "sync", products: updatedProductsArray })
+                body: JSON.stringify({ action: "sync", products: strictProducts })
               });
               setDbStatus('connected'); 
             } catch (error) {
-              console.error("Error guardando en Sheets:", error);
               setDbStatus('error');
             } finally {
               setIsSaving(false);
@@ -221,58 +242,56 @@
             return () => clearInterval(timer);
           }, []);
 
-          // FILTROS DE VISIBILIDAD PARA EL CLIENTE
-          const publicProducts = safeProducts.filter(isProductVisible);
-          
-          const sortedPublicProducts = [...publicProducts].sort((a, b) => {
+          const safeProducts = Array.isArray(products) ? products : [];
+
+          // El Catálogo general ordenado por puntos
+          const allSortedProducts = [...safeProducts].sort((a, b) => {
             const puntosA = parseInt(a.puntos) || 0;
             const puntosB = parseInt(b.puntos) || 0;
             return puntosB - puntosA; 
           });
 
-          const filteredProducts = activeCategory === "Todos" 
-            ? sortedPublicProducts 
-            : sortedPublicProducts.filter(p => p.category === activeCategory);
+          // CLIENTES VEN SOLO LOS QUE ESTÁN VISIBLES
+          const clientVisibleProducts = isAdminView ? allSortedProducts : allSortedProducts.filter(p => isProductVisible(p));
 
-          // FILTRO PARA EL ADMIN (Ve todos los productos, ordenados)
-          const sortedAdminProducts = [...safeProducts].sort((a, b) => {
-            const puntosA = parseInt(a.puntos) || 0;
-            const puntosB = parseInt(b.puntos) || 0;
-            return puntosB - puntosA; 
-          });
+          const catalogProducts = activeCategory === "Todos" 
+            ? clientVisibleProducts 
+            : clientVisibleProducts.filter(p => p.category === activeCategory);
+
+          const topProducts = clientVisibleProducts.filter(p => p.recomendado === true);
 
           const addToCart = (product) => {
             setCart(prev => {
-              const existing = prev.find(item => item.product.id === product.id);
-              if (existing) return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+              const existing = prev.find(item => String(item.product.id) === String(product.id));
+              if (existing) return prev.map(item => String(item.product.id) === String(product.id) ? { ...item, quantity: item.quantity + 1 } : item);
               return [...prev, { product, quantity: 1 }];
             });
           };
 
           const updateQuantity = (productId, delta) => setCart(prev => prev.map(item => {
-            if (item.product.id === productId) {
+            if (String(item.product.id) === String(productId)) {
               const newQuantity = item.quantity + delta;
               return newQuantity > 0 ? { ...item, quantity: newQuantity } : item;
             }
             return item;
           }).filter(item => item.quantity > 0));
-
           const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.product.id !== productId));
           const getCartTotal = () => cart.reduce((total, item) => total + ((parseFloat(item.product.price) || 0) * item.quantity), 0);
           const getCartCount = () => cart.reduce((count, item) => count + item.quantity, 0);
 
           const handleWhatsAppCheckout = () => {
             if (cart.length === 0) return;
-            let message = "Hola, quiero realizar el siguiente pedido:\n\n";
+            let message = "Hola, deseo adquirir las siguientes plataformas:\n\n";
             cart.forEach(item => { message += `• ${item.quantity}x ${item.product.name} (${item.product.type}) - S/${(parseFloat(item.product.price) || 0) * item.quantity}\n`; });
-            message += `\n*Total a pagar: S/${getCartTotal()}*`;
+            message += `\n*Total a pagar: S/${getCartTotal()}*\n\n`;
+            message += `Vendedor que me recomendó: [Escribe su nombre aquí]`;
             window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, '_blank');
           };
 
           const handleDirectWhatsAppBuy = (product) => {
-            let message = `Hola, quiero comprar directamente este producto:\n\n`;
+            let message = `Hola, deseo adquirir la siguiente plataforma:\n\n`;
             message += `• ${product.name} (${product.type}) - S/${product.price}\n\n`;
-            message += `¿Cuáles son los medios de pago?`;
+            message += `Vendedor que me recomendó: [Escribe su nombre aquí]`;
             window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, '_blank');
           };
 
@@ -292,10 +311,11 @@
             let updatedProducts = [];
             
             if (isEditing) {
-              updatedProducts = safeProducts.map(p => p.id === editingId ? {
+              updatedProducts = safeProducts.map(p => String(p.id) === String(editingId) ? {
                 ...p, name: newProduct.name, price: parseFloat(newProduct.price), category: newProduct.category, type: newProduct.type,
                 desc: newProduct.desc, iconName: newProduct.iconName, color: newProduct.color, label: newProduct.label, image: newProduct.image, puntos: parseInt(newProduct.puntos) || 0,
-                visible: p.visible !== undefined ? p.visible : true
+                visible: newProduct.visible !== undefined ? newProduct.visible : true,
+                recomendado: newProduct.recomendado === true
               } : p);
               setIsEditing(false);
               setEditingId(null);
@@ -304,21 +324,31 @@
               const productToAdd = {
                 id: newId, name: newProduct.name, price: parseFloat(newProduct.price), category: newProduct.category, type: newProduct.type,
                 desc: newProduct.desc, iconName: newProduct.iconName, color: newProduct.color, label: newProduct.label, image: newProduct.image, puntos: parseInt(newProduct.puntos) || 0,
-                visible: true
+                visible: newProduct.visible !== undefined ? newProduct.visible : true,
+                recomendado: newProduct.recomendado === true
               };
               updatedProducts = [productToAdd, ...safeProducts];
             }
             
             setProducts(updatedProducts);
             syncToSheets(updatedProducts);
-            setNewProduct({ name: "", price: "", category: "Streaming", type: "", desc: "", iconName: "Tv", color: "from-blue-500 to-blue-800", label: "", image: "", puntos: 0, visible: true });
+            
+            // Si al editar apagas la visibilidad, se borra del carrito por seguridad
+            if (newProduct.visible === false && isEditing) {
+                 removeFromCart(editingId);
+            }
+
+            setNewProduct({ name: "", price: "", category: "Streaming", type: "", desc: "", iconName: "Tv", color: "from-blue-500 to-blue-800", label: "", image: "", puntos: 0, visible: true, recomendado: false });
           };
 
+          // EL BOTÓN DE EDITAR YA FUNCIONA PERFECTAMENTE
           const handleEditClick = (product) => {
             setIsEditing(true);
             setEditingId(product.id);
             setNewProduct({
-              name: product.name || "", price: product.price || "", category: product.category || "Streaming", type: product.type || "", desc: product.desc || "", iconName: product.iconName || "Tv", color: product.color || "from-blue-500 to-blue-800", label: product.label || "", image: product.image || "", puntos: product.puntos || 0, visible: isProductVisible(product)
+              name: product.name || "", price: product.price || "", category: product.category || "Streaming", type: product.type || "", desc: product.desc || "", iconName: product.iconName || "Tv", color: product.color || "from-blue-500 to-blue-800", label: product.label || "", image: product.image || "", puntos: product.puntos || 0,
+              visible: isProductVisible(product),
+              recomendado: product.recomendado === true
             });
             window.scrollTo({ top: 0, behavior: 'smooth' });
           };
@@ -326,12 +356,12 @@
           const handleCancelEdit = () => {
             setIsEditing(false);
             setEditingId(null);
-            setNewProduct({ name: "", price: "", category: "Streaming", type: "", desc: "", iconName: "Tv", color: "from-blue-500 to-blue-800", label: "", image: "", puntos: 0, visible: true });
+            setNewProduct({ name: "", price: "", category: "Streaming", type: "", desc: "", iconName: "Tv", color: "from-blue-500 to-blue-800", label: "", image: "", puntos: 0, visible: true, recomendado: false });
           };
 
           const handleDeleteProduct = (id) => {
             if (window.confirm("¿Estás seguro de eliminar completamente este producto?")) {
-              const updatedProducts = safeProducts.filter(p => p.id !== id);
+              const updatedProducts = safeProducts.filter(p => String(p.id) !== String(id));
               setProducts(updatedProducts);
               removeFromCart(id);
               syncToSheets(updatedProducts);
@@ -342,7 +372,55 @@
             document.getElementById("catalogo-premium")?.scrollIntoView({ behavior: 'smooth' });
           };
 
-          // Función para renderizar las tarjetas de TMDB
+          const renderProductCard = (product) => (
+            <div key={product.id} className="group relative bg-[#12141c]/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col">
+              {product.label && (
+                <div className="absolute top-4 right-4 z-20 pointer-events-none"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-white ${product.label === 'TOP' ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-lg' : product.label === 'OFERTA' ? 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg' : product.label === 'NUEVO' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg' : 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-lg'}`}>{product.label}</span></div>
+              )}
+              
+              <div onClick={() => setSelectedProduct(product)} className={`h-40 w-full relative overflow-hidden flex items-center justify-center cursor-pointer ${!product.image ? `bg-gradient-to-br ${product.color || 'from-gray-800 to-black'}` : 'bg-black'}`}>
+                {product.image ? (
+                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                ) : (
+                  <><div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-300"></div><SvgIcon name={product.iconName} className="w-16 h-16 text-white/90 drop-shadow-2xl group-hover:scale-110 transition-transform duration-500 relative z-10" /><div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div></>
+                )}
+              </div>
+              
+              <div className="p-6 flex-1 flex flex-col relative z-20 bg-[#12141c]/80 backdrop-blur-md">
+                <div className="cursor-pointer group/text" onClick={() => setSelectedProduct(product)}>
+                  <h4 className="text-lg font-bold text-white leading-tight group-hover/text:text-purple-400 transition-colors mb-2">{product.name}</h4>
+                  <span className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-1"><SvgIcon name="CheckCircle2" className="w-3 h-3 text-purple-500" /> {product.type}</span>
+                  <p className="text-sm text-gray-500 mb-3 flex-1 line-clamp-2">{product.desc}</p>
+                  <span className="text-xs text-purple-400 font-bold hover:underline mb-4 inline-block">Ver información completa</span>
+                </div>
+                
+                <div className="mt-auto border-t border-white/5 pt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col"><span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Precio</span><span className="text-2xl font-black text-white">S/{product.price}</span></div>
+                  </div>
+                  
+                  <div className="flex gap-2 w-full">
+                    <button onClick={() => handleDirectWhatsAppBuy(product)} className="flex-1 bg-[#25D366] hover:bg-[#1ebd5a] text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all shadow-[0_0_10px_rgba(37,211,102,0.2)]">
+                      <IconWhatsApp /> WhatsApp
+                    </button>
+                    
+                    {cart.find(item => String(item.product.id) === String(product.id)) ? (
+                      <div className="flex-1 flex items-center justify-between bg-white/10 rounded-xl px-2 py-2 border border-white/10">
+                        <button onClick={() => updateQuantity(product.id, -1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Minus" className="w-4 h-4" /></button>
+                        <span className="font-bold text-sm text-white w-4 text-center">{cart.find(item => String(item.product.id) === String(product.id)).quantity}</span>
+                        <button onClick={() => updateQuantity(product.id, 1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Plus" className="w-4 h-4" /></button>
+                      </div>
+                    ) : (
+                      <button onClick={() => addToCart(product)} className="flex-1 bg-white/5 hover:bg-purple-600 border border-white/10 hover:border-purple-500 text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all">
+                        <IconCart /> Al Carrito
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+
           const renderMovieCard = (movie) => {
               const posterUrl = `https://image.tmdb.org/t/p/w500${movie.poster_path}`;
               const rating = movie.vote_average ? movie.vote_average.toFixed(1) : "N/A";
@@ -354,7 +432,6 @@
                             <SvgIcon name="Star" className="w-3 h-3 fill-black" /> {rating}
                         </span>
                     </div>
-                    
                     <div className="h-64 w-full relative overflow-hidden bg-black flex-shrink-0">
                         {movie.poster_path ? (
                             <img src={posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90 group-hover:opacity-100" />
@@ -363,7 +440,6 @@
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-[#12141c] to-transparent"></div>
                     </div>
-                    
                     <div className="p-5 flex-1 flex flex-col relative z-20 bg-[#12141c] -mt-10">
                         <h4 className="text-lg font-bold text-white leading-tight mb-2 line-clamp-1 group-hover:text-purple-400 transition-colors" title={movie.title}>{movie.title}</h4>
                         <p className="text-xs text-gray-400 line-clamp-3 mb-4">{movie.overview || "Sin descripción disponible."}</p>
@@ -380,17 +456,12 @@
           return (
             <div className="min-h-screen relative overflow-x-hidden bg-transparent">
               
-              {/* --- 🌌 FONDO DE AURORAS BOREALES Y MATRIX 🌌 --- */}
+              {/* --- FONDO INMERSIVO --- */}
               <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none bg-[#050508]">
-                {/* Cuadrícula Matrix */}
                 <div className="absolute inset-[-50px] bg-grid opacity-100"></div>
-                
-                {/* Auroras Boreales Profundas */}
                 <div className="absolute top-[-10%] left-[-20%] w-[120vw] h-[50vh] bg-purple-600/30 blur-[120px] rounded-[100%] aurora-1 mix-blend-screen"></div>
                 <div className="absolute top-[30%] right-[-30%] w-[130vw] h-[60vh] bg-blue-600/30 blur-[130px] rounded-[100%] aurora-2 mix-blend-screen"></div>
                 <div className="absolute bottom-[-10%] left-[10%] w-[140vw] h-[40vh] bg-fuchsia-600/20 blur-[100px] rounded-[100%] aurora-3 mix-blend-screen"></div>
-                
-                {/* Rayos Neón Aleatorios */}
                 <div className="shooting-neon delay-0"></div>
                 <div className="shooting-neon delay-2"></div>
                 <div className="shooting-neon delay-3" style={{ top: '40vh', left: '-50vw', animationDuration: '6s', transform: 'rotate(-25deg)' }}></div>
@@ -410,7 +481,7 @@
                   <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6">
                     <div>
                         <h2 className="text-3xl md:text-4xl font-black mb-2 flex items-center gap-3 text-white"><SvgIcon name="Settings" className="w-8 h-8 text-purple-500" />Panel de Administración</h2>
-                        <p className="text-gray-400">Agrega, edita, oculta y organiza tu catálogo en tiempo real.</p>
+                        <p className="text-gray-400">Agrega, edita y organiza tu catálogo en tiempo real.</p>
                     </div>
                     <div className="flex items-center gap-4">
                         {isSaving && <span className="text-xs text-green-400 flex items-center gap-1 animate-pulse"><SvgIcon name="CloudUpload" className="w-4 h-4"/> Sincronizando...</span>}
@@ -419,7 +490,8 @@
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* FORMULARIO SIMPLE (SIN SWITCH DE VISIBILIDAD) */}
+                    
+                    {/* FORMULARIO DE EDICIÓN CON LOS INTERRUPTORES */}
                     <div className="bg-[#12141c] border border-white/10 rounded-3xl p-6 lg:col-span-1 h-fit shadow-2xl relative overflow-hidden">
                       {isEditing && <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>}
                       <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
@@ -428,6 +500,32 @@
                       </h3>
                       
                       <form onSubmit={handleSaveProduct} className="flex flex-col gap-4 text-sm">
+                        
+                        {/* INTERRUPTORES DE VISIBILIDAD Y DESTACADO */}
+                        <div className="grid grid-cols-2 gap-4 mb-2">
+                            <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-4 flex flex-col justify-center items-center gap-3 text-center">
+                              <label className="font-bold text-white flex items-center gap-2 text-xs">
+                                  <SvgIcon name={newProduct.visible ? "Eye" : "EyeOff"} className={`w-4 h-4 ${newProduct.visible ? 'text-green-500' : 'text-gray-500'}`} /> 
+                                  {newProduct.visible ? 'Visible' : 'Oculto'}
+                              </label>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={newProduct.visible} onChange={e => setNewProduct({...newProduct, visible: e.target.checked})} className="sr-only peer" />
+                                <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 peer-checked:after:bg-white"></div>
+                              </label>
+                            </div>
+
+                            <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-4 flex flex-col justify-center items-center gap-3 text-center">
+                              <label className="font-bold text-white flex items-center gap-2 text-xs">
+                                  <SvgIcon name="Star" className={`w-4 h-4 ${newProduct.recomendado ? 'text-yellow-500 fill-yellow-500' : 'text-gray-500'}`} /> 
+                                  Destacado
+                              </label>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={newProduct.recomendado} onChange={e => setNewProduct({...newProduct, recomendado: e.target.checked})} className="sr-only peer" />
+                                <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500 peer-checked:after:bg-white"></div>
+                              </label>
+                            </div>
+                        </div>
+
                         <div><label className="block text-gray-400 mb-1">Nombre del Servicio</label><input required type="text" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500" placeholder="Ej. Crunchyroll Premium" /></div>
                         
                         <div className="grid grid-cols-2 gap-4">
@@ -472,11 +570,11 @@
                       </form>
                     </div>
 
-                    {/* LISTA ADMIN LIMPIA (SIN VISIBILIDAD) */}
+                    {/* LISTA ADMIN LIMPIA SIN BOTONES DE OJO Y ESTRELLA */}
                     <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-3xl p-6 overflow-hidden flex flex-col h-fit max-h-[800px]">
                       <h3 className="text-xl font-bold mb-6 flex items-center justify-between text-white">Productos en Tienda<span className="bg-purple-600/30 text-purple-400 text-xs px-3 py-1 rounded-full">{safeProducts.length} Items</span></h3>
                       <div className="overflow-y-auto pr-2 hide-scrollbar flex-1 flex flex-col gap-3">
-                        {sortedAdminProducts.map(p => {
+                        {allSortedProducts.map(p => {
                           const isVisible = isProductVisible(p);
                           return (
                           <div key={p.id} className={`flex items-center justify-between p-4 bg-[#12141c] hover:bg-[#1a1d27] transition-all rounded-xl border ${editingId === p.id ? 'border-blue-500' : 'border-white/5'} group ${!isVisible ? 'opacity-50 grayscale' : ''}`}>
@@ -489,6 +587,7 @@
                                 <div className="flex items-center gap-2">
                                     <h4 className="font-bold text-sm text-white group-hover:text-purple-400 transition-colors">{p.name}</h4>
                                     {!isVisible && <span className="text-[9px] bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded uppercase font-bold">Oculto</span>}
+                                    {p.recomendado && <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1.5 py-0.5 rounded uppercase font-bold">Destacado</span>}
                                 </div>
                                 <p className="text-xs text-gray-400">{p.category} • {p.type}</p>
                               </div>
@@ -509,20 +608,26 @@
                 </main>
               ) : (
                 <>
-                  {/* HERO VIDEOS (ESTRUCTURADO Y PEGADO AL TECHO) */}
-                  <section className="relative h-[50vh] md:h-[60vh] w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-16 flex justify-center">
-                    <div className="relative w-full h-full overflow-hidden rounded-b-3xl border-b border-x border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-black">
-                      {HERO_SLIDES.map((slide, index) => (
-                        <div key={slide.id} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
-                          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] via-transparent to-transparent z-20 pointer-events-none"></div>
-                          <video src={slide.video} autoPlay muted loop playsInline className={`w-full h-full object-cover transition-transform duration-[25000ms] ${index === currentSlide ? 'scale-110' : 'scale-100'}`}></video>
-                          <div className="absolute bottom-10 left-0 w-full z-30 flex justify-center">
-                            <button onClick={scrollToCatalog} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-3.5 rounded-full font-black text-lg hover:scale-105 transition-transform shadow-[0_0_30px_rgba(139,92,246,0.6)] animate-bounce">
-                              <SvgIcon name="Zap" className="w-5 h-5" /> Ver Catálogo
-                            </button>
-                          </div>
+                  {/* HERO VIDEOS CON TRAILERS */}
+                  <section className="relative h-[45vh] md:h-[55vh] w-full overflow-hidden flex justify-center">
+                    <div className="container mx-auto px-6 lg:px-12 h-full">
+                        {/* Contenedor del video estructurado y cuadrado exacto con las entradas */}
+                        <div className="relative w-full h-full overflow-hidden rounded-b-3xl border-b border-x border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                            {HERO_SLIDES.map((slide, index) => (
+                              <div key={slide.id} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c] via-transparent to-transparent z-20 pointer-events-none"></div>
+                                {/* Se renderiza el video llenando el 100% del cuadro sin bordes negros */}
+                                {slide.video && slide.video !== "" && slide.video.includes(".mp4") && (
+                                    <video src={slide.video} autoPlay muted loop playsInline className={`w-full h-full object-cover transition-transform duration-[25000ms] ${index === currentSlide ? 'scale-105' : 'scale-100'}`}></video>
+                                )}
+                                <div className="absolute bottom-6 left-0 w-full z-30 flex justify-center">
+                                  <button onClick={scrollToCatalog} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-3.5 rounded-full font-bold text-lg hover:scale-105 transition-all shadow-[0_0_30px_rgba(139,92,246,0.6)] animate-bounce">
+                                    <SvgIcon name="Zap" className="w-5 h-5" /> Ver Catálogo
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
                         </div>
-                      ))}
                     </div>
                   </section>
 
@@ -539,6 +644,21 @@
                             
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                                 {trendingMovies.map(renderMovieCard)}
+                            </div>
+                            <div className="mt-12 mb-6 border-t border-white/10"></div>
+                        </div>
+                    )}
+
+                    {/* TOP RECOMENDADOS DEL MES */}
+                    {!isLoading && activeCategory === "Todos" && topProducts.length > 0 && (
+                        <div className="mb-14 animate-[slideIn_0.3s_ease-out]">
+                            <h3 className="text-2xl md:text-3xl font-black mb-6 flex items-center gap-3 text-white">
+                                <SvgIcon name="Star" className="w-7 h-7 text-yellow-500 fill-yellow-500" /> 
+                                Top Recomendados
+                            </h3>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {topProducts.map(renderProductCard)}
                             </div>
                             <div className="mt-12 mb-6 border-t border-white/10"></div>
                         </div>
@@ -581,54 +701,7 @@
                     ) : (
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                          {filteredProducts.map((product) => (
-                            <div key={product.id} className="group relative bg-[#12141c]/80 backdrop-blur-sm rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col">
-                              {product.label && (
-                                <div className="absolute top-4 right-4 z-20 pointer-events-none"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-white ${product.label === 'TOP' ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-lg' : product.label === 'OFERTA' ? 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg' : product.label === 'NUEVO' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg' : 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-lg'}`}>{product.label}</span></div>
-                              )}
-                              
-                              <div onClick={() => setSelectedProduct(product)} className={`h-40 w-full relative overflow-hidden flex items-center justify-center cursor-pointer ${!product.image ? `bg-gradient-to-br ${product.color || 'from-gray-800 to-black'}` : 'bg-black'}`}>
-                                {product.image ? (
-                                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                                ) : (
-                                  <><div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-300"></div><SvgIcon name={product.iconName} className="w-16 h-16 text-white/90 drop-shadow-2xl group-hover:scale-110 transition-transform duration-500 relative z-10" /><div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div></>
-                                )}
-                              </div>
-                              
-                              <div className="p-6 flex-1 flex flex-col relative z-20 bg-[#12141c]/80 backdrop-blur-md">
-                                <div className="cursor-pointer group/text" onClick={() => setSelectedProduct(product)}>
-                                  <h4 className="text-lg font-bold text-white leading-tight group-hover/text:text-purple-400 transition-colors mb-2">{product.name}</h4>
-                                  <span className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-1"><SvgIcon name="CheckCircle2" className="w-3 h-3 text-purple-500" /> {product.type}</span>
-                                  <p className="text-sm text-gray-500 mb-3 flex-1 line-clamp-2">{product.desc}</p>
-                                  <span className="text-xs text-purple-400 font-bold hover:underline mb-4 inline-block">Ver información completa</span>
-                                </div>
-                                
-                                <div className="mt-auto border-t border-white/5 pt-4">
-                                  <div className="flex items-center justify-between mb-4">
-                                    <div className="flex flex-col"><span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Precio</span><span className="text-2xl font-black text-white">S/{product.price}</span></div>
-                                  </div>
-                                  
-                                  <div className="flex gap-2 w-full">
-                                    <button onClick={() => handleDirectWhatsAppBuy(product)} className="flex-1 bg-[#25D366] hover:bg-[#1ebd5a] text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all shadow-[0_0_10px_rgba(37,211,102,0.2)]">
-                                      <IconWhatsApp /> WhatsApp
-                                    </button>
-                                    
-                                    {cart.find(item => String(item.product.id) === String(product.id)) ? (
-                                      <div className="flex-1 flex items-center justify-between bg-white/10 rounded-xl px-2 py-2 border border-white/10">
-                                        <button onClick={() => updateQuantity(product.id, -1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Minus" className="w-4 h-4" /></button>
-                                        <span className="font-bold text-sm text-white w-4 text-center">{cart.find(item => String(item.product.id) === String(product.id)).quantity}</span>
-                                        <button onClick={() => updateQuantity(product.id, 1)} className="p-1.5 hover:text-purple-400 transition-colors"><SvgIcon name="Plus" className="w-4 h-4" /></button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={() => addToCart(product)} className="flex-1 bg-white/5 hover:bg-purple-600 border border-white/10 hover:border-purple-500 text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-bold text-[13px] transition-all">
-                                        <IconCart /> Al Carrito
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                          {catalogProducts.map(renderProductCard)}
                         </div>
                       </>
                     )}
